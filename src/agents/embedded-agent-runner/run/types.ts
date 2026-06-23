@@ -44,6 +44,7 @@ type EmbeddedRunAttemptBase = Omit<
   | "fastMode"
   | "lane"
   | "enqueue"
+  | "sessionFile"
 >;
 
 export type EmbeddedRunContextWindowInfo = {
@@ -55,6 +56,8 @@ export type EmbeddedRunContextWindowInfo = {
 export type EmbeddedRunFastModeParam = boolean | (() => boolean | undefined);
 
 export type EmbeddedRunAttemptParams = EmbeddedRunAttemptBase & {
+  /** Active file-backed artifact target resolved by the run/session target seam. */
+  sessionFile: string;
   initialReplayState?: EmbeddedRunReplayState;
   /** Pluggable context engine for ingest/assemble/compact lifecycle. */
   contextEngine?: ContextEngine;
