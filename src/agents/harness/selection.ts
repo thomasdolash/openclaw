@@ -39,11 +39,15 @@ import { createOpenClawAgentHarness } from "./builtin-openclaw.js";
 import { MissingAgentHarnessError } from "./errors.js";
 import { runAgentHarnessLifecycleAttempt } from "./lifecycle.js";
 import {
+  buildAgentHarnessNativeToolCapability,
+  buildAttemptNativeTools,
+} from "./native-tool-capability.js";
+import {
   resolveAgentHarnessPolicy as resolveConfiguredAgentHarnessPolicy,
   type AgentHarnessPolicy,
 } from "./policy.js";
 import { getRegisteredAgentHarness, listRegisteredAgentHarnesses } from "./registry.js";
-import type { AgentHarness, AgentHarnessSupport } from "./types.js";
+import type { AgentHarness, AgentHarnessNativeToolExecutor, AgentHarnessSupport } from "./types.js";
 
 const log = createSubsystemLogger("agents/harness");
 export { resolveAgentHarnessPolicy } from "./policy.js";
@@ -314,15 +318,107 @@ export async function runAgentHarnessAttempt(
     agentHarnessRuntimeOverride: params.agentHarnessRuntimeOverride,
   });
   const harness = selection.harness;
+  const nativeCapability = harness.nativeToolCapability;
+  const hasNativeCapability = nativeCapability != null;
+  // Harnesses with native tool capability keep the existing effective tool
+  // policy for intersection; they are not subject to the plugin-harness deny-all.
+  // The deny-all policy only applies to plugin harnesses that do not opt in.
   const attemptParams =
-    harness.id === "openclaw" ? params : applyPluginHarnessDenyAllToolPolicy(params);
+    harness.id === "openclaw" || hasNativeCapability
+      ? params
+      : applyPluginHarnessDenyAllToolPolicy(params);
+
+  // Inject native tool capability when the harness opts in
+  let nativeToolExecutor: AgentHarnessNativeToolExecutor | undefined;
+  if (hasNativeCapability) {
+    const toolContext: Parameters<typeof buildAttemptNativeTools>[0] = {
+      agentId: params.agentId,
+      sessionKey: params.sessionKey,
+      sessionId: params.sessionId,
+      runId: params.runId,
+      config: params.config,
+      modelProvider: params.provider,
+      modelId: params.modelId,
+      messageChannel: params.messageChannel,
+      messageProvider: params.messageProvider,
+      messageTo: params.messageTo,
+      messageThreadId: params.messageThreadId,
+      agentAccountId: params.agentAccountId,
+      groupId: params.groupId,
+      groupChannel: params.groupChannel,
+      groupSpace: params.groupSpace,
+      memberRoleIds: params.memberRoleIds,
+      spawnedBy: params.spawnedBy,
+      senderId: params.senderId,
+      senderName: params.senderName,
+      senderUsername: params.senderUsername,
+      senderE164: params.senderE164,
+      senderIsOwner: params.senderIsOwner,
+      allowGatewaySubagentBinding: params.allowGatewaySubagentBinding,
+      currentChannelId: params.currentChannelId,
+      currentMessagingTarget: params.currentMessagingTarget,
+      currentThreadTs: params.currentThreadTs,
+      currentMessageId: params.currentMessageId,
+      currentInboundAudio: params.currentInboundAudio,
+      authProfileStore: params.authProfileStore,
+      replyToMode: params.replyToMode,
+      sourceReplyDeliveryMode: params.sourceReplyDeliveryMode,
+      disableMessageTool: params.disableMessageTool,
+      forceMessageTool: params.forceMessageTool,
+      enableHeartbeatTool: params.enableHeartbeatTool,
+      forceHeartbeatTool: params.forceHeartbeatTool,
+      includeCoreTools: true,
+      runtimeToolAllowlist: params.toolsAllow,
+      onToolOutcome: params.onToolOutcome,
+      allocateToolOutcomeOrdinal: params.allocateToolOutcomeOrdinal,
+    };
+
+    const filteredTools = buildAttemptNativeTools(toolContext, params.toolsAllow);
+    const built = buildAgentHarnessNativeToolCapability(
+      filteredTools,
+      nativeCapability.tools,
+      params.onAgentToolResult,
+    );
+    attemptParams.nativeToolDefinitions = built.definitions;
+    nativeToolExecutor = built.executor;
+  }
+
   logAgentHarnessSelection(selection, {
     provider: params.provider,
     modelId: params.modelId,
     sessionKey: params.sessionKey,
     agentId: params.agentId,
   });
-  const runAttempt = () => runAgentHarnessLifecycleAttempt(harness, attemptParams);
+
+  let executorInvalidated = false;
+
+  // Wrap the executor to reject calls after the attempt lifecycle completes
+  const wrappedExecutor: AgentHarnessNativeToolExecutor | undefined = nativeToolExecutor
+    ? async (request) => {
+        if (executorInvalidated) {
+          return {
+            content: [{ type: "text", text: "Attempt session is no longer active" }],
+            details: { status: "error", error: "Attempt session is no longer active" },
+            isError: true,
+          };
+        }
+        return nativeToolExecutor(request);
+      }
+    : undefined;
+
+  // Attach the executor to attempt params so the harness can call it
+  if (wrappedExecutor) {
+    attemptParams.nativeToolExecutor = wrappedExecutor;
+  }
+
+  const runAttempt = async () => {
+    try {
+      return await runAgentHarnessLifecycleAttempt(harness, attemptParams);
+    } finally {
+      executorInvalidated = true;
+    }
+  };
+
   if (harness.id === "openclaw") {
     return await runWithDiagnosticTraceContext(harnessTrace, runAttempt);
   }

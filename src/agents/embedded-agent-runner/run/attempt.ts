@@ -110,11 +110,7 @@ import {
   toToolDefinitions,
 } from "../../agent-tool-definition-adapter.js";
 import { recordStructuredReplayTrustForToolCall } from "../../agent-tools.before-tool-call.js";
-import {
-  createOpenClawCodingTools,
-  resolveProcessToolScopeKey,
-  resolveToolLoopDetectionConfig,
-} from "../../agent-tools.js";
+import { resolveProcessToolScopeKey, resolveToolLoopDetectionConfig } from "../../agent-tools.js";
 import {
   resolveEffectiveToolPolicy,
   resolveGroupToolPolicy,
@@ -167,6 +163,7 @@ import { subscribeEmbeddedAgentSession } from "../../embedded-agent-subscribe.js
 import { isSignalTimeoutReason } from "../../failover-error.js";
 import { runAgentEndSideEffects } from "../../harness/agent-end-side-effects.js";
 import { runAgentHarnessBeforeAgentFinalizeHook } from "../../harness/lifecycle-hook-helpers.js";
+import { buildAttemptNativeTools } from "../../harness/native-tool-capability.js";
 import { resolveHeartbeatPromptForSystemPrompt } from "../../heartbeat-system-prompt.js";
 import { resolveImageSanitizationLimits } from "../../image-sanitization.js";
 import {
@@ -1251,111 +1248,111 @@ export async function runEmbeddedAttempt(
     const toolsRaw = !shouldConstructTools
       ? []
       : (() => {
-          const allTools = createOpenClawCodingTools({
-            agentId: sessionAgentId,
-            ...buildEmbeddedAttemptToolRunContext({ ...params, trace: runTrace }),
-            messageChannel: params.messageChannel,
-            exec: {
-              ...params.execOverrides,
-              config: params.config,
-              elevated: params.bashElevated,
-            },
-            sandbox,
-            messageProvider: resolveAttemptToolPolicyMessageProvider(params),
-            agentAccountId: params.agentAccountId,
-            messageTo: params.messageTo,
-            messageThreadId: params.messageThreadId,
-            groupId: params.groupId,
-            groupChannel: params.groupChannel,
-            groupSpace: params.groupSpace,
-            memberRoleIds: params.memberRoleIds,
-            spawnedBy: params.spawnedBy,
-            senderId: params.senderId,
-            channelContext: params.channelContext,
-            senderName: params.senderName,
-            senderUsername: params.senderUsername,
-            senderE164: params.senderE164,
-            senderIsOwner: params.senderIsOwner,
-            allowGatewaySubagentBinding: params.allowGatewaySubagentBinding,
-            sessionKey: sandboxSessionKey,
-            // When sandboxSessionKey differs from the real run session key (e.g. Telegram
-            // direct peer key vs agent:main:main), pass the live key so session_status
-            // "current" resolves to the active run session, not the stale sandbox key.
-            runSessionKey:
-              params.sessionKey && params.sessionKey !== sandboxSessionKey
-                ? params.sessionKey
-                : undefined,
-            sessionId: params.sessionId,
-            runId: params.runId,
-            approvalReviewerDeviceId: params.approvalReviewerDeviceId,
-            oneShotCliRun: params.oneShotCliRun,
-            toolSearchCatalogRef,
-            agentDir,
-            cwd: effectiveCwd,
-            workspaceDir: effectiveWorkspace,
-            // Runtime cwd can point at a task repo while bootstrap/persona files stay in the
-            // agent workspace. Spawned subagents inherit the real agent workspace, not task cwd.
-            spawnWorkspaceDir:
-              effectiveCwd !== effectiveWorkspace
-                ? resolvedWorkspace
-                : resolveAttemptSpawnWorkspaceDir({
-                    sandbox,
-                    resolvedWorkspace,
-                  }),
-            config: toolSearchRuntimeConfig,
-            abortSignal: runAbortController.signal,
-            modelProvider: params.provider,
-            modelId: params.modelId,
-            modelCompat: extractModelCompat(params.model),
-            modelApi: params.model.api,
-            modelContextWindowTokens: params.model.contextWindow,
-            modelAuthMode: resolveModelAuthMode(params.model.provider, params.config, undefined, {
+          const filteredTools = buildAttemptNativeTools(
+            {
+              agentId: sessionAgentId,
+              ...buildEmbeddedAttemptToolRunContext({ ...params, trace: runTrace }),
+              messageChannel: params.messageChannel,
+              exec: {
+                ...params.execOverrides,
+                config: params.config,
+                elevated: params.bashElevated,
+              },
+              sandbox,
+              messageProvider: resolveAttemptToolPolicyMessageProvider(params),
+              agentAccountId: params.agentAccountId,
+              messageTo: params.messageTo,
+              messageThreadId: params.messageThreadId,
+              groupId: params.groupId,
+              groupChannel: params.groupChannel,
+              groupSpace: params.groupSpace,
+              memberRoleIds: params.memberRoleIds,
+              spawnedBy: params.spawnedBy,
+              senderId: params.senderId,
+              channelContext: params.channelContext,
+              senderName: params.senderName,
+              senderUsername: params.senderUsername,
+              senderE164: params.senderE164,
+              senderIsOwner: params.senderIsOwner,
+              allowGatewaySubagentBinding: params.allowGatewaySubagentBinding,
+              sessionKey: sandboxSessionKey,
+              // When sandboxSessionKey differs from the real run session key (e.g. Telegram
+              // direct peer key vs agent:main:main), pass the live key so session_status
+              // "current" resolves to the active run session, not the stale sandbox key.
+              runSessionKey:
+                params.sessionKey && params.sessionKey !== sandboxSessionKey
+                  ? params.sessionKey
+                  : undefined,
+              sessionId: params.sessionId,
+              runId: params.runId,
+              approvalReviewerDeviceId: params.approvalReviewerDeviceId,
+              oneShotCliRun: params.oneShotCliRun,
+              toolSearchCatalogRef,
+              agentDir,
+              cwd: effectiveCwd,
               workspaceDir: effectiveWorkspace,
-            }),
-            currentChannelId: params.currentChannelId,
-            currentMessagingTarget: params.currentMessagingTarget,
-            currentThreadTs: params.currentThreadTs,
-            currentMessageId: params.currentMessageId,
-            currentInboundAudio: params.currentInboundAudio,
-            includeCoreTools: toolConstructionPlan.includeCoreTools,
-            includeToolSearchControls: toolSearchControlsEnabledForRun,
-            toolSearchCatalogExecutor: (toolParams) => {
-              if (!toolSearchCatalogExecutor) {
-                throw new Error("Tool Search catalog executor is unavailable for this run.");
-              }
-              return toolSearchCatalogExecutor(toolParams);
+              // Runtime cwd can point at a task repo while bootstrap/persona files stay in the
+              // agent workspace. Spawned subagents inherit the real agent workspace, not task cwd.
+              spawnWorkspaceDir:
+                effectiveCwd !== effectiveWorkspace
+                  ? resolvedWorkspace
+                  : resolveAttemptSpawnWorkspaceDir({
+                      sandbox,
+                      resolvedWorkspace,
+                    }),
+              config: toolSearchRuntimeConfig,
+              abortSignal: runAbortController.signal,
+              modelProvider: params.provider,
+              modelId: params.modelId,
+              modelCompat: extractModelCompat(params.model),
+              modelApi: params.model.api,
+              modelContextWindowTokens: params.model.contextWindow,
+              modelAuthMode: resolveModelAuthMode(params.model.provider, params.config, undefined, {
+                workspaceDir: effectiveWorkspace,
+              }),
+              currentChannelId: params.currentChannelId,
+              currentMessagingTarget: params.currentMessagingTarget,
+              currentThreadTs: params.currentThreadTs,
+              currentMessageId: params.currentMessageId,
+              currentInboundAudio: params.currentInboundAudio,
+              includeCoreTools: toolConstructionPlan.includeCoreTools,
+              includeToolSearchControls: toolSearchControlsEnabledForRun,
+              toolSearchCatalogExecutor: (toolParams) => {
+                if (!toolSearchCatalogExecutor) {
+                  throw new Error("Tool Search catalog executor is unavailable for this run.");
+                }
+                return toolSearchCatalogExecutor(toolParams);
+              },
+              toolConstructionPlan: toolConstructionPlan.codingToolConstructionPlan,
+              replyToMode: params.replyToMode,
+              hasRepliedRef: params.hasRepliedRef,
+              modelHasVision: params.model.input?.includes("image") ?? false,
+              requireExplicitMessageTarget:
+                params.requireExplicitMessageTarget ?? isSubagentSessionKey(params.sessionKey),
+              sourceReplyDeliveryMode: params.sourceReplyDeliveryMode,
+              inboundEventKind: params.currentInboundEventKind,
+              disableMessageTool: params.disableMessageTool,
+              forceMessageTool: params.forceMessageTool,
+              enableHeartbeatTool: params.enableHeartbeatTool,
+              forceHeartbeatTool: params.forceHeartbeatTool,
+              runtimeToolAllowlist: effectiveToolsAllow,
+              cronCreatorToolAllowlistRef: cronCreatorToolAllowlist,
+              authProfileStore: params.authProfileStore,
+              recordToolPrepStage: (name) => corePluginToolStages.mark(name),
+              onToolOutcome: params.onToolOutcome,
+              allocateToolOutcomeOrdinal: params.allocateToolOutcomeOrdinal,
+              skillsSnapshot: skillsSnapshotForRun,
+              onYield: (message) => {
+                yieldDetected = true;
+                yieldMessage = message;
+                queueYieldInterruptForSession?.();
+                runAbortController.abort("sessions_yield");
+                abortSessionForYield?.();
+              },
             },
-            toolConstructionPlan: toolConstructionPlan.codingToolConstructionPlan,
-            replyToMode: params.replyToMode,
-            hasRepliedRef: params.hasRepliedRef,
-            modelHasVision: params.model.input?.includes("image") ?? false,
-            requireExplicitMessageTarget:
-              params.requireExplicitMessageTarget ?? isSubagentSessionKey(params.sessionKey),
-            sourceReplyDeliveryMode: params.sourceReplyDeliveryMode,
-            inboundEventKind: params.currentInboundEventKind,
-            disableMessageTool: params.disableMessageTool,
-            forceMessageTool: params.forceMessageTool,
-            enableHeartbeatTool: params.enableHeartbeatTool,
-            forceHeartbeatTool: params.forceHeartbeatTool,
-            runtimeToolAllowlist: effectiveToolsAllow,
-            cronCreatorToolAllowlistRef: cronCreatorToolAllowlist,
-            authProfileStore: params.authProfileStore,
-            recordToolPrepStage: (name) => corePluginToolStages.mark(name),
-            onToolOutcome: params.onToolOutcome,
-            allocateToolOutcomeOrdinal: params.allocateToolOutcomeOrdinal,
-            skillsSnapshot: skillsSnapshotForRun,
-            onYield: (message) => {
-              yieldDetected = true;
-              yieldMessage = message;
-              queueYieldInterruptForSession?.();
-              runAbortController.abort("sessions_yield");
-              abortSessionForYield?.();
-            },
-          });
+            effectiveToolsAllow,
+          );
           corePluginToolStages.mark("attempt:create-openclaw-coding-tools");
-          const filteredTools = applyEmbeddedAttemptToolsAllow(allTools, effectiveToolsAllow, {
-            toolMeta: (tool) => getPluginToolMeta(tool),
-          });
           corePluginToolStages.mark("attempt:tools-allow");
           return filteredTools;
         })();

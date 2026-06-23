@@ -19,6 +19,10 @@ import type {
   MessagingToolSend,
   MessagingToolSourceReplyPayload,
 } from "../../embedded-agent-messaging.types.js";
+import type {
+  AgentHarnessNativeToolExecutor,
+  AgentHarnessToolDefinition,
+} from "../../harness/types.js";
 import type { AgentRunTimeoutPhase } from "../../run-timeout-attribution.js";
 import type { AgentRuntimePlan } from "../../runtime-plan/types.js";
 import type { AgentMessage } from "../../runtime/index.js";
@@ -107,6 +111,20 @@ export type EmbeddedRunAttemptParams = EmbeddedRunAttemptBase & {
   beforeAgentStartResult?: PluginHookBeforeAgentStartResult;
   beforeAgentFinalizeRevisionAttempts?: number;
   maxBeforeAgentFinalizeRevisions?: number;
+  /**
+   * Attempt-bound native tool definitions for harness extensions.
+   * Populated by the framework when the selected harness declares
+   * nativeToolCapability. Harnesses read these to expose OpenClaw
+   * tools to their external runtime.
+   */
+  nativeToolDefinitions?: AgentHarnessToolDefinition[];
+  /**
+   * Attempt-bound native tool executor for harness extensions.
+   * Populated by the framework alongside nativeToolDefinitions.
+   * Harnesses call this to execute the declared native tools under
+   * the attempt's session context.
+   */
+  nativeToolExecutor?: AgentHarnessNativeToolExecutor;
 };
 
 export type EmbeddedRunAttemptResult = {

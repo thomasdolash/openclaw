@@ -1,6 +1,31 @@
 /**
  * Public native agent harness contracts and capability shapes.
  */
+
+export type AgentHarnessToolDefinition = {
+  name: string;
+  description: string;
+  parameters: unknown;
+};
+
+export type AgentHarnessNativeToolResult = {
+  content: Array<{
+    type: string;
+    text?: string;
+    data?: unknown;
+  }>;
+  details: unknown;
+  isError: boolean;
+  terminate?: boolean;
+};
+
+export type AgentHarnessNativeToolExecutor = (request: {
+  callId: string;
+  toolName: string;
+  arguments: unknown;
+  signal?: AbortSignal;
+}) => Promise<AgentHarnessNativeToolResult>;
+
 export type AgentHarnessSupportContext = {
   provider: string;
   modelId?: string;
@@ -94,6 +119,20 @@ type AgentHarnessRunCapability = {
    */
   contextEngineHostCapabilities?: readonly import("../../context-engine/types.js").ContextEngineHostCapability[];
   deliveryDefaults?: AgentHarnessDeliveryDefaults;
+  /**
+   * Declares native OpenClaw tool names this harness may expose to its
+   * external runtime. When present, the framework constructs the effective
+   * tool set as the intersection of ordinary OpenClaw tool policy and this
+   * declaration, then supplies serializable definitions and an attempt-bound
+   * executor through the run params.
+   */
+  nativeToolCapability?: {
+    /**
+     * Native OpenClaw tool names this harness is permitted to expose to
+     * its external runtime. Omitted means no native tools are available.
+     */
+    tools?: string[];
+  };
   supports(ctx: AgentHarnessSupportContext): AgentHarnessSupport;
   runAttempt(params: AgentHarnessAttemptParams): Promise<AgentHarnessAttemptResult>;
 };
