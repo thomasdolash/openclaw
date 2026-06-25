@@ -1,3 +1,4 @@
+import type { Model } from "openclaw/plugin-sdk/llm";
 /**
  * Shared parameter and metric types for embedded-agent compaction.
  */
@@ -57,6 +58,8 @@ export type CompactEmbeddedAgentSessionParams = {
   senderIsOwner?: boolean;
   provider?: string;
   model?: string;
+  /** Caller-resolved model/provider shape used by native harness compactors. */
+  runtimeModel?: Model;
   /** Effective model fallback chain for this session attempt. Undefined uses config defaults. */
   modelFallbacksOverride?: string[];
   /** Optional caller-resolved context engine for harness-owned compaction. */
